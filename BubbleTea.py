@@ -7,11 +7,6 @@ Created on Sun Oct  3 19:58:11 2021
 import numpy as np
 import pandas as pd
 import os
-os.chdir(r'D:\DA stuff\Yale DV\BubbleTea')
-os.getcwd()
-
-#%%
-
 import requests # library to handle requests
 
 from geopy.geocoders import Nominatim # module to convert an address into latitude and longitude values
@@ -21,9 +16,8 @@ from pandas.io.json import json_normalize
 
 import folium # plotting library
 
-#%%
+# Import the different subzones in Singapore, and remove subzones that do not have Foursquare entries.
 
-# import demographics data
 demo_chara = pd.read_excel('https://www.singstat.gov.sg/-/media/files/publications/ghs/ghs2015/excel/t1-9.xls',sheet_name='T7(Total)',header = 0)
 demo_chara_c = demo_chara
 demo_chara_c = demo_chara_c.dropna(how = 'all')
@@ -53,7 +47,7 @@ subzones = ['Ang Mo Kio Central' if i=='Ang Mo Kio Town Centre' else i for i in 
 subzones = ['National University of Singapore' if i=="National University Of S'pore" else i for i in subzones]
 subzones = ['Sengkang Central' if i=='Sengkang Town Centre' else i for i in subzones]
 
-#%%
+# Similarly, import the different planning areas within Singapore that the subzones fall under.
 
 planning_areas = demo_chara_c[~demo_chara_c['Subzone'].isnull()][['Planning Area','Subzone']]
 planning_areas = planning_areas[planning_areas['Planning Area'] != 'Total']
@@ -97,9 +91,8 @@ for i in range(0,len(ind_pa)):
             temp = pd.Series(temp, index = data.columns)
             data = data.append(temp, ignore_index = True)    
 
-#%%
-
 household_S = pd.read_excel('https://www.singstat.gov.sg/-/media/files/publications/ghs/ghs2015/excel/t148-152.xls',sheet_name='T151',header = 0)
+
 # remove extra rows and columns
 household_S = household_S.dropna(axis = 1, how = 'all')
 household_S = household_S.dropna()
@@ -112,7 +105,7 @@ towns = household_S['Neighborhood']
 towns = list(filter(('Planning Area').__ne__,towns))
 towns = list(filter(('Others').__ne__,towns))
 
-#%% Singapore Map (coordinates of subzones)
+# Extract coordinates of the various subzones using Geopy Nominatim and plot them on a Singapore map using Folium
 
 lat_info = []
 long_info = []
@@ -133,8 +126,6 @@ for i in range(0,len(subzones)):
     long_info = np.append(long_info,longitude)
     time.sleep(0.5)
 
-#%%
-
 lat = pd.DataFrame(lat_info)
 long = pd.DataFrame(long_info)
 names = pd.DataFrame(subzones)
@@ -142,9 +133,8 @@ sub_coord = pd.concat([names,lat,long],axis=1)
 sub_coord.columns = ['Name','Lat','Long']
 sub_coord = sub_coord.drop_duplicates(subset = ['Lat','Long'])
 
-#%%
+# Extract coordinates of Singapore
 
-# Singapore Lat Long
 address = "Singapore"
 geolocator = Nominatim(user_agent="foursquare_agent")  
 location = geolocator.geocode(address)
@@ -168,7 +158,7 @@ for lat, lng, neighborhood in zip(sub_coord['Lat'], sub_coord['Long'], sub_coord
 
 map_singapore.save("mymap.html")
 
-#%% extract coordinates of planning areas
+# Extract coordinates of planning areas
 
 lat_info2 = []
 long_info2 = []
@@ -199,7 +189,7 @@ pa_coord = pd.concat([names2,lat2,long2],axis=1)
 pa_coord.columns = ['Name','Lat','Long']
 pa_coord = pa_coord.drop_duplicates(subset = ['Lat','Long'])
 
-#%% Define Foursquare credentials
+# Use Foursquare API to extract bubble tea shops in each planning area/town
 
 CLIENT_ID = '0OGT50X5XRDU5V5PAH0HYBFUXCMC1M4PYNUYTZ2PMJF3N4PK'
 CLIENT_SECRET ='BLRVRECCNGXR02QZAQANBRJNXWAQX0GC034PVBWGYCSTGFPM'
@@ -210,13 +200,7 @@ print('Your credentials:')
 print('CLIENT_ID: ' + CLIENT_ID)
 print('CLIENT_SECRET:' + CLIENT_SECRET)
 
-#radius = 50000
-# url = 'https://api.foursquare.com/v2/venues/explore?client_id={}&client_secret={}&ll={},{}&v={}&radius={}&limit={}'.format(CLIENT_ID, CLIENT_SECRET, latitude, longitude, VERSION, radius, LIMIT)
-#url = 'https://api.foursquare.com/v2/venues/search?client_id={}&client_secret={}&ll={},{}&v={}&limit={}&query={}'.format(CLIENT_ID, CLIENT_SECRET, latitude, longitude, VERSION, LIMIT, QUERY)
-
 import requests
-
-#results = requests.get(url).json()
 
 bbt_list=[]
 
@@ -229,12 +213,7 @@ for name, lat, lng in zip(temp['Name'], temp['Lat'], temp['Long']):
         
     # make the GET request
     results = requests.get(url).json()["response"]['groups'][0]['items']
-    
-#    if 'venues' in results:
-#        results = results['venues']
-#    else:
-#        results = results
-    
+   
     # return only relevant information for each nearby venue
     bbt_list.append([(
         name, 
@@ -244,8 +223,6 @@ for name, lat, lng in zip(temp['Name'], temp['Lat'], temp['Long']):
         v['venue']['location']['lat'], 
         v['venue']['location']['lng'],  
         v['venue']['location']['formattedAddress'][0]) for v in results])
-
-#%%
 
 expanded_bbt = pd.DataFrame(columns = ['Subzone','Lat','Long','Name','Lat2','Long2','City'])
 
@@ -266,7 +243,7 @@ expanded_bbt['Name_Lower'] = temp_name
 
 temp_pa = [data[data['Subzone'] ==  x]['Planning Area'].values for x in expanded_bbt['Subzone']]
 
-#%%
+# Group the results into the respective planning areas based on shortest distance
 
 from haversine import haversine as hs
 
@@ -304,7 +281,7 @@ for x in range(len(expanded_bbt)):
 
 expanded_bbt['Matched Planning Area'] = temp_pa
 
-#%%
+# Clean up the data by manually renaming different variants of the same name. Attempts to use clustering modules did not work well. 
 
 bbt_names2 = expanded_bbt['Name_Lower']
 
@@ -344,16 +321,11 @@ expanded_bbt.loc[:,'Name_Lower'] = bbt_names2
 expanded_bbt_2 = expanded_bbt.drop_duplicates(['Name_Lower','Lat2','Long2','City'])
 duplicatedrows = expanded_bbt[expanded_bbt.duplicated(['Name_Lower','Lat2','Long2','City'])]
 
-#%%
+# Find the most common franchise within each planning area
 
-#expanded_bbt_grp = expanded_bbt_2.groupby('Subzone')['Name_Lower'].apply(lambda x: x.value_counts().index[0]).reset_index()
-#expanded_bbt_grp2 = expanded_bbt_2.groupby(['Subzone','Name_Lower']).agg(lambda x:x.value_counts().index[0])
 expanded_bbt_grp = expanded_bbt_2.groupby(['Matched Planning Area','Name_Lower']).size().to_frame(name = 'Count').reset_index()
-#expanded_bbt_grp2 = expanded_bbt_grp.groupby(['Matched Planning Area'], sort = False)['Count'].max()
 idx = expanded_bbt_grp.groupby(['Matched Planning Area'])['Count'].transform(max) == expanded_bbt_grp['Count']
 expanded_bbt_grp3 = expanded_bbt_grp[idx]
-
-#%%
 
 with_max = expanded_bbt_grp3.groupby(['Matched Planning Area']).size().to_frame(name = 'Count Stores').reset_index()
 with_max = with_max[with_max['Count Stores'] == 1].reset_index(drop = True)
@@ -369,17 +341,14 @@ with_max = with_max[with_max['Matched Planning Area'] != 'Simpang']
 no_max = pd.merge(no_max,expanded_bbt_grp3,on = 'Matched Planning Area').drop(columns = ['Count Stores'])
 no_max_dropped = pd.merge(no_max,pa_coord,left_on = 'Matched Planning Area',right_on='Name')
 
-#%%
-
 no_max = no_max.drop_duplicates(['Matched Planning Area'])
-#%%
+
+# Indicate the most common franchises in each planning area using different coloured markers, with the number of stores indicated by the size of the markers. 
 
 color_keys = with_max['Name_Lower'].unique()
 color_values = ['red', 'blue', 'green', 'purple', 'orange', 'darkred','lightred', 'beige', 'darkblue', 'darkgreen', 'cadetblue', 'darkpurple', 'white', 'pink', 'lightblue', 'lightgreen', 'gray', 'black', 'lightgray']
 colors = color_values[0:len(color_keys)]
 dictionary = dict(zip(color_keys,colors))
-
-#%%
 
 # Singapore Lat Long
 address = "Singapore"
@@ -417,13 +386,12 @@ for lat, lng, neighborhood,count in zip(no_max_dropped['Lat'], no_max_dropped['L
 
 map_singapore2.save("mymap2.html")
 
-#%%
+## Attempts to clean up names using clustering modules. 
 
 import re
 
 bbt_names3 = [re.sub("([^\x00-\x7F])+"," ",x) for x in bbt_names] # drop non english characters
 bbt_names3 = [re.sub("[\(\[].*?[\)\]]", "", x) for x in bbt_names2] # remove brackets
-#bbt_names2 = [x.replace(" ", "") for x in bbt_names2]
 
 #%%
 
